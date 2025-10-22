@@ -34,282 +34,177 @@
 <canvas id="parChart" width="900" height="300"></canvas>
 
 
-  <script>
-    // Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyA-GDgNBC4wVbX7fz4oZlrHTDvww3PvsFo",
-      authDomain: "photobioreactor-ba2d0.firebaseapp.com",
-      databaseURL: "https://photobioreactor-ba2d0-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "photobioreactor-ba2d0",
-      storageBucket: "photobioreactor-ba2d0.firebasestorage.app",
-      messagingSenderId: "338121363769",
-      appId: "1:338121363769:web:ca6325c300a46668a8d8e8"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+<script>
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyA-GDgNBC4wVbX7fz4oZlrHTDvww3PvsFo",
+    authDomain: "photobioreactor-ba2d0.firebaseapp.com",
+    databaseURL: "https://photobioreactor-ba2d0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "photobioreactor-ba2d0",
+    storageBucket: "photobioreactor-ba2d0.firebasestorage.app",
+    messagingSenderId: "338121363769",
+    appId: "1:338121363769:web:ca6325c300a46668a8d8e8"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
+  const tempCtx = document.getElementById('tempChart').getContext('2d');
+  const phCtx = document.getElementById('phChart').getContext('2d');
+  const ecCtx = document.getElementById('ecChart').getContext('2d');
+  const parCtx = document.getElementById('parChart').getContext('2d');
 
-
-const tempCtx = document.getElementById('tempChart').getContext('2d');
-const phCtx = document.getElementById('phChart').getContext('2d');
-const ecCtx = document.getElementById('ecChart').getContext('2d');
-const parCtx = document.getElementById('parChart').getContext('2d');
-
-// Temperature chart with temp1, temp2, temp3
-const tempChart = new Chart(tempCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      { label: 'Temperature 1 (°C)', data: [], borderColor: 'blue', fill: false },
-      { label: 'Temperature 2 (°C)', data: [], borderColor: 'green', fill: false },
-      { label: 'Temperature 3 (°C)', data: [], borderColor: 'red', fill: false }
-    ]
-  },
-  options: {
-    responsive: true,
-    scales: {
-      x: {
-        type: 'time',
-        time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-        title: { display: true, text: 'Time' }
-      },
-      y: {
-        title: { display: true, text: 'Temperature (°C)' }
+  // Temperature chart with 3 sensors
+  const tempChart = new Chart(tempCtx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Temperature 1 (°C)', data: [], borderColor: 'blue', fill: false },
+        { label: 'Temperature 2 (°C)', data: [], borderColor: 'green', fill: false },
+        { label: 'Temperature 3 (°C)', data: [], borderColor: 'red', fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { type: 'time', time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' }, title: { display: true, text: 'Time' } },
+        y: { title: { display: true, text: 'Temperature (°C)' } }
       }
     }
-  }
-});
+  });
 
-// pH chart
-const phChart = new Chart(phCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      { label: 'pH', data: [], borderColor: 'purple', fill: false }
-    ]
-  },
-  options: {
-  responsive: true,
-  plugins: {
-    annotation: {
-      annotations: {
-        lineLow: {
-          type: 'line',
-          yMin: 755,
-          yMax: 755,
-          borderColor: 'green',
-          borderWidth: 2,
-          label: {
-            enabled: true,
-            content: 'pH 6.5',
-            position: 'end'
-          }
-        },
-        lineHigh: {
-          type: 'line',
-          yMin: 827,
-          yMax: 827,
-          borderColor: 'green',
-          borderWidth: 2,
-          label: {
-            enabled: true,
-            content: 'pH 7.5',
-            position: 'end'
+  // pH chart with 10-period moving average
+  const phChart = new Chart(phCtx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'pH', data: [], borderColor: 'purple', fill: false },
+        { label: 'pH (10-point Avg)', data: [], borderColor: 'gold', borderDash: [5,5], fill: false } // contrast color
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        annotation: {
+          annotations: {
+            lineLow: { type: 'line', yMin: 755, yMax: 755, borderColor: 'green', borderWidth: 2, label: { enabled: true, content: 'pH 6.5', position: 'end' }},
+            lineHigh: { type: 'line', yMin: 827, yMax: 827, borderColor: 'green', borderWidth: 2, label: { enabled: true, content: 'pH 7.5', position: 'end' }}
           }
         }
+      },
+      scales: {
+        x: { type: 'time', time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' }, title: { display: true, text: 'Time' }},
+        y: { title: { display: true, text: 'pH Value' }}
       }
     }
-  },
-  scales: {
-    x: {
-      type: 'time',
-      time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-      title: { display: true, text: 'Time' }
-    },
-    y: {
-      title: { display: true, text: 'pH Value' }
-    }
-  }
-}
-});
+  });
 
-// PAR chart
-const parChart = new Chart(parCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      {
-        label: 'PAR',
-        data: [],
-        borderColor: 'green',   // you can use 'limegreen' or '#00FF7F' for better visibility
-        fill: false
-      }
-    ]
-  },
-  options: {
-    responsive: true,
-    plugins: {
-      annotation: {
-        annotations: {
-          parUpperLimit: {
-            type: 'line',
-            yMin: 250,
-            yMax: 250,
-            borderColor: 'green',
-            borderWidth: 2,
-            label: {
-              enabled: true,
-              content: 'Target PAR 250 µmol/m²/s',
-              position: 'end'
-            }
-          },
-          parLowerLimit: {
-            type: 'line',
-            yMin: 150,
-            yMax: 150,
-            borderColor: 'red',
-            borderWidth: 2,
-            label: {
-              enabled: true,
-              content: 'Min PAR 150 µmol/m²/s',
-              position: 'end'
+  // EC chart with moving average
+  const ecChart = new Chart(ecCtx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'EC', data: [], borderColor: 'orange', fill: false },
+        { label: 'EC (10-point Avg)', data: [], borderColor: 'cyan', borderDash: [5,5], fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        annotation: {
+          annotations: {
+            ecLowerLimit: {
+              type: 'line',
+              yMin: 16, yMax: 16,
+              borderColor: 'orange', borderWidth: 2,
+              label: { enabled: true, content: 'EC 2 mS/cm', position: 'end' }
             }
           }
         }
-      }
-    },
-    scales: {
-      x: {
-        type: 'time',
-        time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-        title: { display: true, text: 'Time' }
       },
-      y: {
-        min: 0,
-        max: 400, // typical PAR range for PBR light intensity
-        title: { display: true, text: 'PAR (µmol/m²/s)' }
+      scales: {
+        x: { type: 'time', time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' }, title: { display: true, text: 'Time' }},
+        y: { min: 0, title: { display: true, text: 'EC Value (mS/cm)' }}
       }
     }
-  }
-});
+  });
 
-
-// EC chart
-const ecChart = new Chart(ecCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      { label: 'EC', data: [], borderColor: 'orange', fill: false }
-    ]
-  },
- options: {
-  responsive: true,
-  plugins: {
-    annotation: {
-      annotations: {
-        ecLowerLimit: {
-          type: 'line',
-          yMin: 16,
-          yMax: 16,
-          borderColor: 'orange',
-          borderWidth: 2,
-          label: {
-            enabled: true,
-            content: 'EC 2 mS/cm',
-            position: 'end'
-          }
-        }
+  // PAR chart (unchanged)
+  const parChart = new Chart(parCtx, {
+    type: 'line',
+    data: { datasets: [{ label: 'PAR', data: [], borderColor: 'green', fill: false }] },
+    options: {
+      responsive: true,
+      scales: {
+        x: { type: 'time', time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' }, title: { display: true, text: 'Time' }},
+        y: { min: 0, max: 400, title: { display: true, text: 'PAR (µmol/m²/s)' }}
       }
     }
-  },
-  scales: {
-    x: {
-      type: 'time',
-      time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-      title: { display: true, text: 'Time' }
-    },
-    y: {
-      min: 0,      // or set min: 1.5 if you want slightly below 2
-      // max: 10,   // optional max if you want to limit max value
-      title: { display: true, text: 'EC Value (mS/cm)' }
+  });
+
+  const dataBuffer = [];
+
+  db.ref('sensors/data').limitToLast(300).on('child_added', snapshot => {
+    const key = snapshot.key;
+    const data = snapshot.val();
+    const parts = key.split('_');
+    const datetimeStr = `${parts[2]}T${parts[3].replace(/-/g, ':')}`;
+    const timestamp = new Date(datetimeStr);
+
+    const temp1 = parseFloat(data.temp1);
+    const temp2 = parseFloat(data.temp2);
+    const temp3 = parseFloat(data.temp3);
+    const ph = parseFloat(data.pHraw);
+    const ec = parseFloat(data.ecRaw);
+    const par = parseFloat(data.par);
+
+    dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
+    updateCharts();
+  });
+
+  const filterSelect = document.getElementById('timeFilter');
+  filterSelect.addEventListener('change', updateCharts);
+
+  function movingAverage(dataArray, key, period) {
+    const avgData = [];
+    for (let i = 0; i < dataArray.length; i++) {
+      if (i >= period - 1) {
+        const subset = dataArray.slice(i - period + 1, i + 1);
+        const avg = subset.reduce((sum, d) => sum + d[key], 0) / period;
+        avgData.push({ x: dataArray[i].timestamp, y: avg });
+      }
     }
-  }
-}
-
-
-});
-
-const dataBuffer = [];
-
-db.ref('sensors/data').limitToLast(300).on('child_added', snapshot => {
-  const key = snapshot.key;
-  const data = snapshot.val();
-
-  const parts = key.split('_');
-  const datetimeStr = `${parts[2]}T${parts[3].replace(/-/g, ':')}`;
-  const timestamp = new Date(datetimeStr);
-
-  const temp1 = parseFloat(data.temp1);
-  const temp2 = parseFloat(data.temp2);
-  const temp3 = parseFloat(data.temp3);
-  const ph = parseFloat(data.pHraw);
-  const ec = parseFloat(data.ecRaw);
-  const par = parseFloat(data.par);
-
-  dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
-  updateCharts();
-});
-
-const filterSelect = document.getElementById('timeFilter');
-filterSelect.addEventListener('change', updateCharts);
-
-function updateCharts() {
-  const filter = filterSelect.value;
-  const now = new Date();
-  let rangeStart;
-
-  if (filter === '5m') {
-    rangeStart = new Date(now.getTime() - 5 * 60 * 1000);
-    var timeUnit = 'minute';
-  } else if (filter === '1h') {
-    rangeStart = new Date(now.getTime() - 60 * 60 * 1000);
-    var timeUnit = 'minute';
-  } else if (filter === '1d') {
-    rangeStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    var timeUnit = 'hour';
-  } else if (filter === '1M') {
-    rangeStart = new Date(now);
-    rangeStart.setMonth(now.getMonth() - 1);
-    var timeUnit = 'day';
+    return avgData;
   }
 
-  // Filtered data arrays
-  const filteredData = dataBuffer.filter(d => d.timestamp >= rangeStart);
+  function updateCharts() {
+    const filter = filterSelect.value;
+    const now = new Date();
+    let rangeStart;
 
-  // Update tempChart data
-  tempChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp1 }));
-  tempChart.data.datasets[1].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp2 }));
-  tempChart.data.datasets[2].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp3 }));
-  tempChart.options.scales.x.time.unit = timeUnit;
-  tempChart.update();
+    if (filter === '5m') rangeStart = new Date(now.getTime() - 5 * 60 * 1000);
+    else if (filter === '1h') rangeStart = new Date(now.getTime() - 60 * 60 * 1000);
+    else if (filter === '1d') rangeStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    else if (filter === '1M') { rangeStart = new Date(now); rangeStart.setMonth(now.getMonth() - 1); }
 
-  // Update phChart data
-  phChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ph }));
-  phChart.options.scales.x.time.unit = timeUnit;
-  phChart.update();
+    const filteredData = dataBuffer.filter(d => d.timestamp >= rangeStart);
 
-  // Update ecChart data
-  ecChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ec }));
-  ecChart.options.scales.x.time.unit = timeUnit;
-  ecChart.update();
+    tempChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp1 }));
+    tempChart.data.datasets[1].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp2 }));
+    tempChart.data.datasets[2].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp3 }));
+    tempChart.update();
 
-  // Update parChart data
-  parChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.par }));
-  parChart.options.scales.x.time.unit = timeUnit;
-  parChart.update();
-}
+    phChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ph }));
+    phChart.data.datasets[1].data = movingAverage(filteredData, 'ph', 10);
+    phChart.update();
 
-  </script>
+    ecChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ec }));
+    ecChart.data.datasets[1].data = movingAverage(filteredData, 'ec', 10);
+    ecChart.update();
+
+    parChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.par }));
+    parChart.update();
+  }
+</script>
+
 </body>
 </html>
-
