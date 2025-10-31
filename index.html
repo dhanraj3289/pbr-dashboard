@@ -33,169 +33,282 @@
 <h2>PAR Chart</h2>
 <canvas id="parChart" width="900" height="300"></canvas>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.1.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 
-<script>
-  // Firebase config
-  const firebaseConfig = {
-    apiKey: "AIzaSyA-GDgNBC4wVbX7fz4oZlrHTDvww3PvsFo",
-    authDomain: "photobioreactor-ba2d0.firebaseapp.com",
-    databaseURL: "https://photobioreactor-ba2d0-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "photobioreactor-ba2d0",
-    storageBucket: "photobioreactor-ba2d0.firebasestorage.app",
-    messagingSenderId: "338121363769",
-    appId: "1:338121363769:web:ca6325c300a46668a8d8e8"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA-GDgNBC4wVbX7fz4oZlrHTDvww3PvsFo",
+      authDomain: "photobioreactor-ba2d0.firebaseapp.com",
+      databaseURL: "https://photobioreactor-ba2d0-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "photobioreactor-ba2d0",
+      storageBucket: "photobioreactor-ba2d0.firebasestorage.app",
+      messagingSenderId: "338121363769",
+      appId: "1:338121363769:web:ca6325c300a46668a8d8e8"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-  // Create chart helper
-  function makeChart(ctx, label, color, yTitle) {
-    return new Chart(ctx, {
-      type: 'line',
-      data: { datasets: label.map((l, i) => ({
-        label: l,
-        data: [],
-        borderColor: color[i],
-        fill: false,
-        borderWidth: 1.5,
-        pointRadius: 0
-      })) },
-      options: {
-        responsive: true,
-        interaction: { mode: 'x' },
-        plugins: {
-          zoom: {
-            zoom: { wheel: { enabled: true }, mode: 'x' },
-            pan: { enabled: true, mode: 'x' }
-          },
-          legend: { position: 'top' }
+
+
+const tempCtx = document.getElementById('tempChart').getContext('2d');
+const phCtx = document.getElementById('phChart').getContext('2d');
+const ecCtx = document.getElementById('ecChart').getContext('2d');
+const parCtx = document.getElementById('parChart').getContext('2d');
+
+// Temperature chart with temp1, temp2, temp3
+const tempChart = new Chart(tempCtx, {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: 'Temperature 1 (°C)', data: [], borderColor: 'blue', fill: false },
+      { label: 'Temperature 2 (°C)', data: [], borderColor: 'green', fill: false },
+      { label: 'Temperature 3 (°C)', data: [], borderColor: 'red', fill: false }
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: {
+      x: {
+        type: 'time',
+        time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
+        title: { display: true, text: 'Time' }
+      },
+      y: {
+        title: { display: true, text: 'Temperature (°C)' }
+      }
+    }
+  }
+});
+
+// pH chart
+const phChart = new Chart(phCtx, {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: 'pH', data: [], borderColor: 'purple', fill: false }
+    ]
+  },
+  options: {
+  responsive: true,
+  plugins: {
+    annotation: {
+      annotations: {
+        lineLow: {
+          type: 'line',
+          yMin: 755,
+          yMax: 755,
+          borderColor: 'green',
+          borderWidth: 2,
+          label: {
+            enabled: true,
+            content: 'pH 6.5',
+            position: 'end'
+          }
         },
-        scales: {
-          x: {
-            type: 'time',
-            time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-            title: { display: true, text: 'Time' }
-          },
-          y: {
-            title: { display: true, text: yTitle }
+        lineHigh: {
+          type: 'line',
+          yMin: 827,
+          yMax: 827,
+          borderColor: 'green',
+          borderWidth: 2,
+          label: {
+            enabled: true,
+            content: 'pH 7.5',
+            position: 'end'
           }
         }
       }
-    });
-  }
-
-  const tempChart = makeChart(
-    document.getElementById('tempChart').getContext('2d'),
-    ['Temperature 1 (°C)', 'Temperature 2 (°C)', 'Temperature 3 (°C)'],
-    ['blue', 'green', 'red'],
-    'Temperature (°C)'
-  );
-
-  const phChart = makeChart(
-    document.getElementById('phChart').getContext('2d'),
-    ['pH'],
-    ['purple'],
-    'pH Value'
-  );
-
-  const ecChart = makeChart(
-    document.getElementById('ecChart').getContext('2d'),
-    ['EC'],
-    ['orange'],
-    'EC (mS/cm)'
-  );
-
-  const parChart = makeChart(
-    document.getElementById('parChart').getContext('2d'),
-    ['PAR'],
-    ['limegreen'],
-    'PAR (µmol/m²/s)'
-  );
-
-  const dataBuffer = [];
-
-  // Fetch large historical window (e.g. last 5000 entries)
-  db.ref('sensors/data').limitToLast(5000).on('child_added', snapshot => {
-    const key = snapshot.key;
-    const data = snapshot.val();
-
-    const parts = key.split('_');
-    const datetimeStr = `${parts[2]}T${parts[3].replace(/-/g, ':')}`;
-    const timestamp = new Date(datetimeStr);
-
-    const entry = {
-      timestamp,
-      temp1: parseFloat(data.temp1),
-      temp2: parseFloat(data.temp2),
-      temp3: parseFloat(data.temp3),
-      ph: parseFloat(data.pHraw),
-      ec: parseFloat(data.ecRaw),
-      par: parseFloat(data.par)
-    };
-
-    dataBuffer.push(entry);
-    updateCharts();
-  });
-
-  const filterSelect = document.getElementById('timeFilter');
-  filterSelect.addEventListener('change', updateCharts);
-
-  function updateCharts() {
-    const filter = filterSelect.value;
-    const now = new Date();
-    let rangeStart, timeUnit;
-
-    if (filter === '5m') {
-      rangeStart = new Date(now - 5 * 60 * 1000);
-      timeUnit = 'minute';
-    } else if (filter === '1h') {
-      rangeStart = new Date(now - 60 * 60 * 1000);
-      timeUnit = 'minute';
-    } else if (filter === '1d') {
-      rangeStart = new Date(now - 24 * 60 * 60 * 1000);
-      timeUnit = 'hour';
-    } else if (filter === '1M') {
-      rangeStart = new Date(now);
-      rangeStart.setMonth(now.getMonth() - 1);
-      timeUnit = 'day';
     }
+  },
+  scales: {
+    x: {
+      type: 'time',
+      time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
+      title: { display: true, text: 'Time' }
+    },
+    y: {
+      title: { display: true, text: 'pH Value' }
+    }
+  }
+}
+});
 
-    const filtered = dataBuffer.filter(d => d.timestamp >= rangeStart);
+// PAR chart
+const parChart = new Chart(parCtx, {
+  type: 'line',
+  data: {
+    datasets: [
+      {
+        label: 'PAR',
+        data: [],
+        borderColor: 'green',   // you can use 'limegreen' or '#00FF7F' for better visibility
+        fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      annotation: {
+        annotations: {
+          parUpperLimit: {
+            type: 'line',
+            yMin: 250,
+            yMax: 250,
+            borderColor: 'green',
+            borderWidth: 2,
+            label: {
+              enabled: true,
+              content: 'Target PAR 250 µmol/m²/s',
+              position: 'end'
+            }
+          },
+          parLowerLimit: {
+            type: 'line',
+            yMin: 150,
+            yMax: 150,
+            borderColor: 'red',
+            borderWidth: 2,
+            label: {
+              enabled: true,
+              content: 'Min PAR 150 µmol/m²/s',
+              position: 'end'
+            }
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'time',
+        time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
+        title: { display: true, text: 'Time' }
+      },
+      y: {
+        min: 0,
+        max: 400, // typical PAR range for PBR light intensity
+        title: { display: true, text: 'PAR (µmol/m²/s)' }
+      }
+    }
+  }
+});
 
-    tempChart.data.datasets[0].data = filtered.map(d => ({ x: d.timestamp, y: d.temp1 }));
-    tempChart.data.datasets[1].data = filtered.map(d => ({ x: d.timestamp, y: d.temp2 }));
-    tempChart.data.datasets[2].data = filtered.map(d => ({ x: d.timestamp, y: d.temp3 }));
-    tempChart.options.scales.x.time.unit = timeUnit;
-    tempChart.update('none');
 
-    phChart.data.datasets[0].data = filtered.map(d => ({ x: d.timestamp, y: d.ph }));
-    phChart.options.scales.x.time.unit = timeUnit;
-    phChart.update('none');
+// EC chart
+const ecChart = new Chart(ecCtx, {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: 'EC', data: [], borderColor: 'orange', fill: false }
+    ]
+  },
+ options: {
+  responsive: true,
+  plugins: {
+    annotation: {
+      annotations: {
+        ecLowerLimit: {
+          type: 'line',
+          yMin: 16,
+          yMax: 16,
+          borderColor: 'orange',
+          borderWidth: 2,
+          label: {
+            enabled: true,
+            content: 'EC 2 mS/cm',
+            position: 'end'
+          }
+        }
+      }
+    }
+  },
+  scales: {
+    x: {
+      type: 'time',
+      time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
+      title: { display: true, text: 'Time' }
+    },
+    y: {
+      min: 0,      // or set min: 1.5 if you want slightly below 2
+      // max: 10,   // optional max if you want to limit max value
+      title: { display: true, text: 'EC Value (mS/cm)' }
+    }
+  }
+}
 
-    ecChart.data.datasets[0].data = filtered.map(d => ({ x: d.timestamp, y: d.ec }));
-    ecChart.options.scales.x.time.unit = timeUnit;
-    ecChart.update('none');
 
-    parChart.data.datasets[0].data = filtered.map(d => ({ x: d.timestamp, y: d.par }));
-    parChart.options.scales.x.time.unit = timeUnit;
-    parChart.update('none');
+});
+
+const dataBuffer = [];
+
+db.ref('sensors/data').limitToLast(300).on('child_added', snapshot => {
+  const key = snapshot.key;
+  const data = snapshot.val();
+
+  const parts = key.split('_');
+  const datetimeStr = `${parts[2]}T${parts[3].replace(/-/g, ':')}`;
+  const timestamp = new Date(datetimeStr);
+
+  const temp1 = parseFloat(data.temp1);
+  const temp2 = parseFloat(data.temp2);
+  const temp3 = parseFloat(data.temp3);
+  const ph = parseFloat(data.pHraw);
+  const ec = parseFloat(data.ecRaw);
+  const par = parseFloat(data.par);
+
+  dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
+  updateCharts();
+});
+
+const filterSelect = document.getElementById('timeFilter');
+filterSelect.addEventListener('change', updateCharts);
+
+function updateCharts() {
+  const filter = filterSelect.value;
+  const now = new Date();
+  let rangeStart;
+
+  if (filter === '5m') {
+    rangeStart = new Date(now.getTime() - 5 * 60 * 1000);
+    var timeUnit = 'minute';
+  } else if (filter === '1h') {
+    rangeStart = new Date(now.getTime() - 60 * 60 * 1000);
+    var timeUnit = 'minute';
+  } else if (filter === '1d') {
+    rangeStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    var timeUnit = 'hour';
+  } else if (filter === '1M') {
+    rangeStart = new Date(now);
+    rangeStart.setMonth(now.getMonth() - 1);
+    var timeUnit = 'day';
   }
 
-  // Add zoom reset button
-  const resetBtn = document.createElement('button');
-  resetBtn.textContent = 'Reset Zoom';
-  resetBtn.style.margin = '10px';
-  resetBtn.onclick = () => {
-    [tempChart, phChart, ecChart, parChart].forEach(ch => ch.resetZoom());
-  };
-  document.body.insertBefore(resetBtn, document.body.firstChild);
-</script>
+  // Filtered data arrays
+  const filteredData = dataBuffer.filter(d => d.timestamp >= rangeStart);
 
+  // Update tempChart data
+  tempChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp1 }));
+  tempChart.data.datasets[1].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp2 }));
+  tempChart.data.datasets[2].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp3 }));
+  tempChart.options.scales.x.time.unit = timeUnit;
+  tempChart.update();
+
+  // Update phChart data
+  phChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ph }));
+  phChart.options.scales.x.time.unit = timeUnit;
+  phChart.update();
+
+  // Update ecChart data
+  ecChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ec }));
+  ecChart.options.scales.x.time.unit = timeUnit;
+  ecChart.update();
+
+  // Update parChart data
+  parChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.par }));
+  parChart.options.scales.x.time.unit = timeUnit;
+  parChart.update();
+}
+
+  </script>
 </body>
 </html>
