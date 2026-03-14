@@ -252,8 +252,8 @@ db.ref('sensors/data').limitToLast(300).on('child_added', snapshot => {
   const temp1 = parseFloat(data.temp1);
   const temp2 = parseFloat(data.temp2);
   const temp3 = parseFloat(data.temp3);
-  const ph = parseFloat(data.pHraw);
-  const ec = parseFloat(data.ecRaw);
+  const ph = parseFloat(data.pHavg);
+  const ec = parseFloat(data.ECavg);
   const par = parseFloat(data.par);
 
   dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
