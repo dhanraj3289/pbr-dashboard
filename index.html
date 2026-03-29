@@ -245,18 +245,20 @@ db.ref('sensors/data').limitToLast(300).on('child_added', snapshot => {
   const key = snapshot.key;
   const data = snapshot.val();
 
-  const parts = key.split('_');
-  const datetimeStr = `${parts[2]}T${parts[3].replace(/-/g, ':')}`;
-  const timestamp = new Date(datetimeStr);
+// Use ESP timestamp (HH:MM:SS) and combine with today’s date
+const timeStr = data.timestamp || "00:00:00"; // fallback
+const today = new Date();
+const [hh, mm, ss] = timeStr.split(':').map(Number);
+const timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hh, mm, ss);
 
-  const temp1 = parseFloat(data.temp1);
-  const temp2 = parseFloat(data.temp2);
-  const temp3 = parseFloat(data.temp3);
-  const ph = parseFloat(data.pHavg);
-  const ec = parseFloat(data.ECavg);
-  const par = parseFloat(data.par);
+const temp1 = parseFloat(data.temp1);
+const temp2 = parseFloat(data.temp2);
+const temp3 = parseFloat(data.temp3);
+const ph = parseFloat(data.pHavg);
+const ec = parseFloat(data.ECavg);
+const par = parseFloat(data.par);
 
-  dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
+dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
   updateCharts();
 });
 
