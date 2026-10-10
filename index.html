@@ -1,316 +1,173 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Live Sensor Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.1.0"></script>
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Sensor Dashboard</title>
+<!-- Pinned, compatible versions (bundle adapter includes date-fns) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 16px; max-width: 1000px; }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  button, select { padding: 6px 10px; }
+  #status { margin-left: auto; font-size: 14px; }
+  canvas { max-width: 100%; }
+</style>
 </head>
 <body>
-  <h2>Real-Time Sensor Chart (Temperature & pH)</h2>
+<h2>Photobioreactor – Live Sensor Charts</h2>
 
-  <!-- Time Filter Dropdown -->
-  <label for="timeFilter">Time Range:</label>
+<div class="bar">
+  <label for="timeFilter">Time range:</label>
   <select id="timeFilter">
     <option value="5m">Last 5 Minutes</option>
     <option value="1h" selected>Last 1 Hour</option>
     <option value="1d">Last 1 Day</option>
     <option value="1M">Last 1 Month</option>
   </select>
+  <button id="prev">⬅ Earlier</button>
+  <button id="next">Later ➡</button>
+  <button id="liveBtn">Go live</button>
+  <span id="status">Loading…</span>
+</div>
 
-<h2>Temperature Chart (°C)</h2>
-<canvas id="tempChart" width="900" height="300"></canvas>
+<h3>Temperature (°C)</h3><canvas id="tempChart" height="110"></canvas>
+<h3>pH</h3><canvas id="phChart" height="110"></canvas>
+<h3>EC</h3><canvas id="ecChart" height="110"></canvas>
+<h3>PAR</h3><canvas id="parChart" height="110"></canvas>
 
-<h2>pH Chart</h2>
-<canvas id="phChart" width="900" height="300"></canvas>
+<script>
+// ---------- CONFIG ----------
+const MAX_RECORDS = 3000;   // how many latest records to load from Firebase
+// Reference lines. NOTE: your pH/EC lines were 555/600/70 but labelled pH 7.5/6.5 and 2 mS/cm.
+// Set these to the SAME units your sensors upload (raw ADC or calibrated).
+const PH_LINES  = [{ v: 555, label: 'pH low line' }, { v: 600, label: 'pH high line' }];
+const EC_LINES  = [{ v: 70,  label: 'EC min line' }];
+const PAR_LINES = [{ v: 250, label: 'Target PAR 250', c: 'green' }, { v: 150, label: 'Min PAR 150', c: 'red' }];
 
-<h2>EC Chart</h2>
-<canvas id="ecChart" width="900" height="300"></canvas>
-
-<h2>PAR Chart</h2>
-<canvas id="parChart" width="900" height="300"></canvas>
-
-
-  <script>
-    // Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyA-GDgNBC4wVbX7fz4oZlrHTDvww3PvsFo",
-      authDomain: "photobioreactor-ba2d0.firebaseapp.com",
-      databaseURL: "https://photobioreactor-ba2d0-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "photobioreactor-ba2d0",
-      storageBucket: "photobioreactor-ba2d0.firebasestorage.app",
-      messagingSenderId: "338121363769",
-      appId: "1:338121363769:web:ca6325c300a46668a8d8e8"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-
-
-const tempCtx = document.getElementById('tempChart').getContext('2d');
-const phCtx = document.getElementById('phChart').getContext('2d');
-const ecCtx = document.getElementById('ecChart').getContext('2d');
-const parCtx = document.getElementById('parChart').getContext('2d');
-
-// Temperature chart with temp1, temp2, temp3
-const tempChart = new Chart(tempCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      { label: 'Temperature 1 (°C)', data: [], borderColor: 'blue', fill: false },
-      { label: 'Temperature 2 (°C)', data: [], borderColor: 'green', fill: false },
-      { label: 'Temperature 3 (°C)', data: [], borderColor: 'red', fill: false }
-    ]
-  },
-  options: {
-    responsive: true,
-    scales: {
-      x: {
-        type: 'time',
-        time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-        title: { display: true, text: 'Time' }
-      },
-      y: {
-        title: { display: true, text: 'Temperature (°C)' }
-      }
-    }
-  }
+firebase.initializeApp({
+  apiKey: "AIzaSyA-GDgNBC4wVbX7fz4oZlrHTDvww3PvsFo",
+  authDomain: "photobioreactor-ba2d0.firebaseapp.com",
+  databaseURL: "https://photobioreactor-ba2d0-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "photobioreactor-ba2d0",
+  storageBucket: "photobioreactor-ba2d0.firebasestorage.app",
+  messagingSenderId: "338121363769",
+  appId: "1:338121363769:web:ca6325c300a46668a8d8e8"
 });
+const db = firebase.database();
 
-// pH chart
-const phChart = new Chart(phCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      { label: 'pH', data: [], borderColor: 'purple', fill: false }
-    ]
-  },
-  options: {
-  responsive: true,
-  plugins: {
-    annotation: {
-      annotations: {
-        lineLow: {
-          type: 'line',
-          yMin: 555,
-          yMax: 555,
-          borderColor: 'green',
-          borderWidth: 2,
-          label: {
-            enabled: true,
-            content: 'pH 7.5',
-            position: 'end'
-          }
-        },
-        lineHigh: {
-          type: 'line',
-          yMin: 600,
-          yMax: 600,
-          borderColor: 'green',
-          borderWidth: 2,
-          label: {
-            enabled: true,
-            content: 'pH 6.5',
-            position: 'end'
-          }
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      type: 'time',
-      time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-      title: { display: true, text: 'Time' }
-    },
-    y: {
-      title: { display: true, text: 'pH Value' }
-    }
-  }
+// ---------- CHARTS ----------
+function lines(list, color) {
+  const a = {};
+  list.forEach((l, i) => a['l' + i] = {
+    type: 'line', yMin: l.v, yMax: l.v, borderColor: l.c || color, borderWidth: 2,
+    label: { display: true, content: l.label, position: 'end' }
+  });
+  return a;
 }
-});
-
-// PAR chart
-const parChart = new Chart(parCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      {
-        label: 'PAR',
-        data: [],
-        borderColor: 'green',   // you can use 'limegreen' or '#00FF7F' for better visibility
-        fill: false
-      }
-    ]
-  },
-  options: {
-    responsive: true,
-    plugins: {
-      annotation: {
-        annotations: {
-          parUpperLimit: {
-            type: 'line',
-            yMin: 250,
-            yMax: 250,
-            borderColor: 'green',
-            borderWidth: 2,
-            label: {
-              enabled: true,
-              content: 'Target PAR 250 µmol/m²/s',
-              position: 'end'
-            }
-          },
-          parLowerLimit: {
-            type: 'line',
-            yMin: 150,
-            yMax: 150,
-            borderColor: 'red',
-            borderWidth: 2,
-            label: {
-              enabled: true,
-              content: 'Min PAR 150 µmol/m²/s',
-              position: 'end'
-            }
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        type: 'time',
-        time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-        title: { display: true, text: 'Time' }
-      },
-      y: {
-        min: 0,
-        max: 400, // typical PAR range for PBR light intensity
-        title: { display: true, text: 'PAR (µmol/m²/s)' }
+function makeChart(id, datasets, annotations, yExtra) {
+  return new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { datasets: datasets.map(d => ({ ...d, data: [], fill: false, pointRadius: 2, spanGaps: true })) },
+    options: {
+      responsive: true, animation: false,
+      plugins: { annotation: { annotations } },
+      scales: {
+        x: { type: 'time', time: { tooltipFormat: 'MMM d, h:mm:ss a' }, title: { display: true, text: 'Time' } },
+        y: { ...yExtra }
       }
     }
-  }
-});
-
-
-// EC chart
-const ecChart = new Chart(ecCtx, {
-  type: 'line',
-  data: {
-    datasets: [
-      { label: 'EC', data: [], borderColor: 'orange', fill: false }
-    ]
-  },
- options: {
-  responsive: true,
-  plugins: {
-    annotation: {
-      annotations: {
-        ecLowerLimit: {
-          type: 'line',
-          yMin: 70,
-          yMax: 70,
-          borderColor: 'orange',
-          borderWidth: 2,
-          label: {
-            enabled: true,
-            content: 'EC 2 mS/cm',
-            position: 'end'
-          }
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      type: 'time',
-      time: { tooltipFormat: 'MMM d, h:mm:ss a', unit: 'minute' },
-      title: { display: true, text: 'Time' }
-    },
-    y: {
-      min: 0,      // or set min: 1.5 if you want slightly below 2
-      // max: 10,   // optional max if you want to limit max value
-      title: { display: true, text: 'EC Value (mS/cm)' }
-    }
-  }
+  });
 }
+const tempChart = makeChart('tempChart', [
+  { label: 'Temperature 1 (°C)', borderColor: 'blue' },
+  { label: 'Temperature 2 (°C)', borderColor: 'green' },
+  { label: 'Temperature 3 (°C)', borderColor: 'red' }], {}, { title: { display: true, text: '°C' } });
+const phChart  = makeChart('phChart',  [{ label: 'pH', borderColor: 'purple' }], lines(PH_LINES, 'green'), {});
+const ecChart  = makeChart('ecChart',  [{ label: 'EC', borderColor: 'orange' }], lines(EC_LINES, 'orange'), { min: 0 });
+const parChart = makeChart('parChart', [{ label: 'PAR', borderColor: 'green' }], lines(PAR_LINES, 'green'), { min: 0, max: 400 });
+const charts = [tempChart, phChart, ecChart, parChart];
 
-
-});
-
+// ---------- DATA ----------
 const dataBuffer = [];
+const seen = new Set();
 
-db.ref('sensors/data').limitToLast(300).on('child_added', snapshot => {
-  const key = snapshot.key;
-  const data = snapshot.val();
+// Key looks like Reactor_1_2026-03-29_15-13-26  ->  full local Date (date + time)
+function parseKeyDate(key) {
+  const m = key.match(/(\d{4})-(\d{1,2})-(\d{1,2})_(\d{1,2})-(\d{1,2})-(\d{1,2})$/);
+  return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null;
+}
+const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 
-// Use ESP timestamp (HH:MM:SS) and combine with today’s date
-const timeStr = data.timestamp || "00:00:00"; // fallback
-const today = new Date();
-const [hh, mm, ss] = timeStr.split(':').map(Number);
-const timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hh, mm, ss);
-
-const temp1 = parseFloat(data.temp1);
-const temp2 = parseFloat(data.temp2);
-const temp3 = parseFloat(data.temp3);
-const ph = parseFloat(data.pHavg);
-const ec = parseFloat(data.ECavg);
-const par = parseFloat(data.par);
-
-dataBuffer.push({ timestamp, temp1, temp2, temp3, ph, ec, par });
-  updateCharts();
+db.ref('sensors/data').limitToLast(MAX_RECORDS).on('child_added', snap => {
+  const key = snap.key, d = snap.val();
+  if (!d || d.type === 'event' || seen.has(key)) return;   // ignore events
+  const ts = parseKeyDate(key);
+  if (!ts) return;
+  seen.add(key);
+  dataBuffer.push({
+    ts, t1: num(d.temp1), t2: num(d.temp2), t3: num(d.temp3),
+    ph: num(d.pHavg), ec: num(d.ECavg), par: num(d.par)
+  });
+  scheduleUpdate();
 });
 
-const filterSelect = document.getElementById('timeFilter');
-filterSelect.addEventListener('change', updateCharts);
+// ---------- WINDOW / LIVE LOGIC ----------
+const sel = document.getElementById('timeFilter');
+const statusEl = document.getElementById('status');
+let live = true, viewStart = null, viewEnd = null, timer = null;
+
+const durationMs = () => ({ '5m': 5 * 60e3, '1h': 3600e3, '1d': 86400e3, '1M': 30 * 86400e3 }[sel.value]);
+
+function scheduleUpdate() {            // batches the burst of initial child_added events
+  if (timer) return;
+  timer = setTimeout(() => { timer = null; updateCharts(); }, 150);
+}
 
 function updateCharts() {
-  const filter = filterSelect.value;
-  const now = new Date();
-  let rangeStart;
-
-  if (filter === '5m') {
-    rangeStart = new Date(now.getTime() - 5 * 60 * 1000);
-    var timeUnit = 'minute';
-  } else if (filter === '1h') {
-    rangeStart = new Date(now.getTime() - 60 * 60 * 1000);
-    var timeUnit = 'minute';
-  } else if (filter === '1d') {
-    rangeStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    var timeUnit = 'hour';
-  } else if (filter === '1M') {
-    rangeStart = new Date(now);
-    rangeStart.setMonth(now.getMonth() - 1);
-    var timeUnit = 'day';
+  if (live) {                          // live: window always ends "now", so new points appear
+    viewEnd = new Date();
+    viewStart = new Date(viewEnd - durationMs());
   }
+  const rows = dataBuffer.filter(r => r.ts >= viewStart && r.ts <= viewEnd).sort((a, b) => a.ts - b.ts);
+  const map = f => rows.map(r => ({ x: r.ts, y: r[f] }));
 
-  // Filtered data arrays
-  const filteredData = dataBuffer.filter(d => d.timestamp >= rangeStart);
+  tempChart.data.datasets[0].data = map('t1');
+  tempChart.data.datasets[1].data = map('t2');
+  tempChart.data.datasets[2].data = map('t3');
+  phChart.data.datasets[0].data   = map('ph');
+  ecChart.data.datasets[0].data   = map('ec');
+  parChart.data.datasets[0].data  = map('par');
 
-  // Update tempChart data
-  tempChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp1 }));
-  tempChart.data.datasets[1].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp2 }));
-  tempChart.data.datasets[2].data = filteredData.map(d => ({ x: d.timestamp, y: d.temp3 }));
-  tempChart.options.scales.x.time.unit = timeUnit;
-  tempChart.update();
+  charts.forEach(c => {
+    c.options.scales.x.min = viewStart;
+    c.options.scales.x.max = viewEnd;
+    c.update('none');
+  });
 
-  // Update phChart data
-  phChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ph }));
-  phChart.options.scales.x.time.unit = timeUnit;
-  phChart.update();
-
-  // Update ecChart data
-  ecChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.ec }));
-  ecChart.options.scales.x.time.unit = timeUnit;
-  ecChart.update();
-
-  // Update parChart data
-  parChart.data.datasets[0].data = filteredData.map(d => ({ x: d.timestamp, y: d.par }));
-  parChart.options.scales.x.time.unit = timeUnit;
-  parChart.update();
+  const last = dataBuffer.length ? dataBuffer[dataBuffer.length - 1].ts.toLocaleString() : 'no data yet';
+  statusEl.textContent = (live ? '● LIVE' : '⏸ Paused') + ' | ' + rows.length + ' pts in view | latest: ' + last;
 }
 
-  </script>
+function shiftWindow(dir) {
+  const d = durationMs();
+  viewStart = new Date(viewStart.getTime() + dir * d);
+  viewEnd   = new Date(viewEnd.getTime() + dir * d);
+  live = viewEnd >= new Date();        // reaching "now" resumes live mode
+  updateCharts();
+}
+
+sel.addEventListener('change', () => { live = true; updateCharts(); });
+document.getElementById('prev').onclick = () => { live = false; shiftWindow(-1); };
+document.getElementById('next').onclick = () => shiftWindow(1);
+document.getElementById('liveBtn').onclick = () => { live = true; updateCharts(); };
+
+setInterval(() => { if (live) updateCharts(); }, 5000);   // keep window sliding even without new data
+updateCharts();
+</script>
 </body>
 </html>
