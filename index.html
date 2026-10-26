@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"> 
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live Sensor Dashboard</title>
 <!-- Pinned, compatible versions (bundle adapter includes date-fns) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -45,7 +45,10 @@
 const MAX_RECORDS = 3000;   // how many latest records to load from Firebase
 // Reference lines. NOTE: your pH/EC lines were 555/600/70 but labelled pH 7.5/6.5 and 2 mS/cm.
 // Set these to the SAME units your sensors upload (raw ADC or calibrated).
-const PH_LINES  = [{ v: 555, label: 'pH low line' }, { v: 600, label: 'pH high line' }];
+const PH_LINES = [
+  { v: 9.0, label: 'pH 9.0' },
+  { v: 10.0, label: 'pH 10.0' }
+];
 const EC_LINES  = [{ v: 70,  label: 'EC min line' }];
 const PAR_LINES = [{ v: 250, label: 'Target PAR 250', c: 'green' }, { v: 150, label: 'Min PAR 150', c: 'red' }];
 
@@ -111,7 +114,10 @@ db.ref('sensors/data').limitToLast(MAX_RECORDS).on('child_added', snap => {
   seen.add(key);
   dataBuffer.push({
     ts, t1: num(d.temp1), t2: num(d.temp2), t3: num(d.temp3),
-    ph: num(d.pHavg), ec: num(d.ECavg), par: num(d.par)
+    ph: num(d.pHavg) === null
+    ? null
+    : 29.09473 - 0.0406452 * num(d.pHavg),
+    ec: num(d.ECavg), par: num(d.par)
   });
   scheduleUpdate();
 });
