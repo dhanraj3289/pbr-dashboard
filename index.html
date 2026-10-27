@@ -92,7 +92,7 @@ const tempChart = makeChart('tempChart', [
   { label: 'Temperature 3 (°C)', borderColor: 'red' }], {}, { title: { display: true, text: '°C' } });
 const phChart  = makeChart('phChart',  [{ label: 'pH', borderColor: 'purple' }], lines(PH_LINES, 'green'), {});
 const ecChart  = makeChart('ecChart',  [{ label: 'EC', borderColor: 'orange' }], lines(EC_LINES, 'orange'), { min: 0 });
-const parChart = makeChart('parChart', [{ label: 'PAR', borderColor: 'green' }], lines(PAR_LINES, 'green'), { min: 0, max: 400 });
+const parChart = makeChart('parChart', [{ label: 'PAR', borderColor: 'green' }], lines(PAR_LINES, 'green'), { min: 0, max: 2000 });
 const charts = [tempChart, phChart, ecChart, parChart];
 
 // ---------- DATA ----------
